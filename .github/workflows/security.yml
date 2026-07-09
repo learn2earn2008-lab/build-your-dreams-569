@@ -1,0 +1,52 @@
+# Security scan gate for pull requests.
+#
+# What this enforces in CI:
+#   - A dependency vulnerability audit (npm audit) against the committed
+#     lockfile. The job fails the PR if any HIGH or CRITICAL advisory is found,
+#     matching the severity bar Lovable's dependency scanner uses.
+#
+# What CANNOT run here:
+#   - Lovable's backend/RLS security scanner and the Supabase database linter
+#     are part of the Lovable platform, not a standalone CLI, so they run inside
+#     Lovable (Security tab) rather than in GitHub Actions. Keep using the
+#     in-product scan for database/RLS coverage.
+#
+# To tighten the gate to "zero findings at ANY severity", change
+# `--audit-level=high` to `--audit-level=low` in the audit step.
+
+name: Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Prevent redundant runs on rapid pushes to the same PR/branch.
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (from lockfile)
+        run: npm ci
+
+      # Fails the job (non-zero exit) when any high/critical advisory is present,
+      # blocking the PR until dependencies are upgraded.
+      - name: Audit dependencies (fail on high/critical)
+        run: npm audit --audit-level=high
