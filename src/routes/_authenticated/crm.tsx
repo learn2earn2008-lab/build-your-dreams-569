@@ -132,6 +132,11 @@ function CrmPage() {
     { lead: Lead; notification: LeadNotification } | null
   >(null);
 
+  // Leads whose alert status we keep polling until it settles after a retry.
+  const [settlingIds, setSettlingIds] = useState<Set<string>>(new Set());
+  const settleDeadline = useRef(0);
+  const seenPending = useRef<Set<string>>(new Set());
+
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
