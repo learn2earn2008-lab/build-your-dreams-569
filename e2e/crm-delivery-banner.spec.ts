@@ -142,25 +142,36 @@ async function installMocks(
 
   // TanStack server functions: `/ln/*` in production builds, `/_serverFn/*`
   // under the Vite dev server. GET -> getLeadNotifications, POST -> retry.
-  let retried = false;
+  // Tracks which leads have actually been re-queued. The retry POST body
+  // carries the selected lead ids, so we can settle only the selected subset
+  // and leave un-selected leads untouched — exactly what the CRM does.
+  const retriedIds = new Set<string>();
   let poll = 0;
   const serverFn = (route: Route) => {
     if (route.request().method() === "POST") {
-      retried = true;
-      // Every selected lead is re-queued so the settling window opens.
+      // The server-fn POST body embeds the selected lead ids (regardless of
+      // encoding), so match known ids against the raw payload.
+      const raw = route.request().postData() ?? "";
+      for (const lead of leads) if (raw.includes(lead.id)) retriedIds.add(lead.id);
       return serverFnJson(route, {
-        requeued: leads.length,
+        requeued: retriedIds.size,
         suppressed: 0,
         failed: 0,
         notFound: 0,
       });
     }
-    if (retried) poll += 1;
-    const rows = leads.map((lead) =>
-      notification(lead, retried ? status(lead, { retried, poll }) : "failed"),
-    );
+    if (retriedIds.size > 0) poll += 1;
+    const rows = leads.map((lead) => {
+      const retried = retriedIds.has(lead.id);
+      // Before any retry every lead is "failed" (retryable + selectable). After
+      // a retry the resolver drives status; `retried` tells it whether THIS
+      // lead was part of the selected set.
+      const s = retriedIds.size > 0 ? status(lead, { retried, poll }) : "failed";
+      return notification(lead, s);
+    });
     return serverFnJson(route, rows);
   };
+
   await page.route("**/_serverFn/**", serverFn);
   await page.route("**/ln/**", serverFn);
 }
