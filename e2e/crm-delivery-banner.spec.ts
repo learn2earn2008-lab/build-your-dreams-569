@@ -58,11 +58,14 @@ function json(route: Route, body: unknown, status = 200) {
 
 /**
  * Fulfills a TanStack server-function call. The Start client deserializes
- * server-fn responses with seroval and only when the `x-tss-serialized`
- * header is present, so the body must be seroval cross-JSON (not raw JSON).
+ * server-fn responses with seroval (only when `x-tss-serialized` is set) and
+ * returns the `result` field of the middleware envelope, so the body must be a
+ * seroval cross-JSON `{ result, context }` object — not raw JSON.
  */
 async function serverFnJson(route: Route, data: unknown) {
-  const body = JSON.stringify(await toCrossJSONAsync(data, {}));
+  const body = JSON.stringify(
+    await toCrossJSONAsync({ result: data, context: {} }, {}),
+  );
   return route.fulfill({
     status: 200,
     headers: {
