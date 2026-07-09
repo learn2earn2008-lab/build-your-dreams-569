@@ -17,12 +17,13 @@ import {
   Loader2,
   Send,
   StickyNote,
+  Info,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PIPELINE_STAGES } from "@/lib/site-config";
-import { getLeadNotifications } from "@/lib/leads.functions";
+import { getLeadNotifications, type LeadNotification } from "@/lib/leads.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -108,6 +109,9 @@ function CrmPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const [alertDetail, setAlertDetail] = useState<
+    { lead: Lead; notification: LeadNotification } | null
+  >(null);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["leads"],
@@ -128,10 +132,10 @@ function CrmPage() {
   });
 
   const notifyByLead = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, LeadNotification>();
     // notifications come newest-first; keep the first (latest) per lead.
     for (const n of notifications) {
-      if (n.lead_id && !map.has(n.lead_id)) map.set(n.lead_id, n.status);
+      if (n.lead_id && !map.has(n.lead_id)) map.set(n.lead_id, n);
     }
     return map;
   }, [notifications]);
@@ -151,7 +155,7 @@ function CrmPage() {
         !q ||
         l.name.toLowerCase().includes(q) ||
         l.email.toLowerCase().includes(q);
-      const status = notifyByLead.get(l.id);
+      const status = notifyByLead.get(l.id)?.status;
       const matchesNotify =
         notify === "all" ||
         (notify === "none" && !status) ||
@@ -324,13 +328,32 @@ function CrmPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {(() => {
-                        const s = notifyState(notifyByLead.get(lead.id));
-                        return (
+                        const n = notifyByLead.get(lead.id);
+                        const s = notifyState(n?.status);
+                        const hasError =
+                          !!n &&
+                          (n.status === "failed" ||
+                            n.status === "dlq" ||
+                            n.status === "suppressed");
+                        const badge = (
                           <Badge variant="secondary" className={s.className}>
                             {s.label}
                           </Badge>
+                        );
+                        if (!hasError) return badge;
+                        return (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            onClick={() =>
+                              setAlertDetail({ lead, notification: n })
+                            }
+                          >
+                            {badge}
+                            <Info className="size-3.5 text-muted-foreground" />
+                          </button>
                         );
                       })()}
                     </TableCell>
@@ -348,7 +371,76 @@ function CrmPage() {
       {selected && (
         <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
       )}
+
+      {alertDetail && (
+        <AlertDetailDialog
+          lead={alertDetail.lead}
+          notification={alertDetail.notification}
+          onClose={() => setAlertDetail(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function AlertDetailDialog({
+  lead,
+  notification,
+  onClose,
+}: {
+  lead: Lead;
+  notification: LeadNotification;
+  onClose: () => void;
+}) {
+  const s = notifyState(notification.status);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            Notification details
+            <Badge variant="secondary" className={s.className}>
+              {s.label}
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 text-sm">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Lead</p>
+            <p className="font-medium">{lead.name}</p>
+            <p className="text-muted-foreground">
+              {notification.lead_email ?? lead.email}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Last attempt
+            </p>
+            <p>
+              {formatDistanceToNow(new Date(notification.created_at), {
+                addSuffix: true,
+              })}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Error details
+            </p>
+            {notification.error_message ? (
+              <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/50 p-3 text-xs text-foreground">
+                {notification.error_message}
+              </pre>
+            ) : (
+              <p className="text-muted-foreground">
+                {notification.status === "suppressed"
+                  ? "This address is on the suppression list (previous bounce or complaint), so the alert was not sent."
+                  : "No error message was recorded for this attempt."}
+              </p>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
