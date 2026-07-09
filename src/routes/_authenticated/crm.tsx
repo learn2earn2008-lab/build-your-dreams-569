@@ -422,22 +422,69 @@ function AlertDetailDialog({
               })}
             </p>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
-              Error details
-            </p>
-            {notification.error_message ? (
-              <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/50 p-3 text-xs text-foreground">
-                {notification.error_message}
-              </pre>
-            ) : (
-              <p className="text-muted-foreground">
-                {notification.status === "suppressed"
-                  ? "This address is on the suppression list (previous bounce or complaint), so the alert was not sent."
-                  : "No error message was recorded for this attempt."}
-              </p>
-            )}
-          </div>
+          {(() => {
+            const detail = notification.error_detail;
+            const message = detail?.message ?? notification.error_message ?? null;
+            const rows: Array<{ label: string; value: string }> = [];
+            if (detail?.code != null)
+              rows.push({ label: "Code", value: String(detail.code) });
+            if (detail?.status != null)
+              rows.push({ label: "HTTP status", value: String(detail.status) });
+            if (detail?.retry_after_seconds != null)
+              rows.push({
+                label: "Retry after",
+                value: `${detail.retry_after_seconds}s`,
+              });
+            const body = detail?.body ?? detail?.response ?? null;
+            const hasAny = message || rows.length > 0 || body;
+            return (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Error details
+                </p>
+                {!hasAny ? (
+                  <p className="mt-1 text-muted-foreground">
+                    {notification.status === "suppressed"
+                      ? "This address is on the suppression list (previous bounce or complaint), so the alert was not sent."
+                      : "No error message was recorded for this attempt."}
+                  </p>
+                ) : (
+                  <div className="mt-1 space-y-3">
+                    {message && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Message
+                        </p>
+                        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/50 p-3 text-xs text-foreground">
+                          {message}
+                        </pre>
+                      </div>
+                    )}
+                    {rows.length > 0 && (
+                      <dl className="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1 text-xs">
+                        {rows.map((r) => (
+                          <div key={r.label} className="contents">
+                            <dt className="text-muted-foreground">{r.label}</dt>
+                            <dd className="font-mono">{r.value}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                    {body && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Response body
+                        </p>
+                        <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded-md border bg-muted/50 p-3 text-xs text-foreground">
+                          {body}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </DialogContent>
     </Dialog>

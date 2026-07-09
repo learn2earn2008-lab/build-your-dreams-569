@@ -35,11 +35,31 @@ function getRetryAfterSeconds(error: unknown): number {
   return 60
 }
 
+// Capture the full structured provider error so the CRM can surface message,
+// HTTP status/code, and any response body for failed/suppressed alerts.
+function toErrorDetail(error: unknown, message: string): Record<string, unknown> {
+  const detail: Record<string, unknown> = { message }
+  const asText = (v: unknown): string =>
+    typeof v === 'string' ? v : JSON.stringify(v)
+  if (error && typeof error === 'object') {
+    const e = error as Record<string, unknown>
+    if ('status' in e && e.status != null) detail.status = e.status
+    if ('code' in e && e.code != null) detail.code = e.code
+    if ('retryAfterSeconds' in e && e.retryAfterSeconds != null)
+      detail.retry_after_seconds = e.retryAfterSeconds
+    if ('body' in e && e.body != null) detail.body = asText(e.body)
+    if ('responseBody' in e && e.responseBody != null) detail.body = asText(e.responseBody)
+    if ('response' in e && e.response != null) detail.response = asText(e.response)
+  }
+  return detail
+}
+
 async function moveToDlq(
   supabase: SupabaseClient<any, any>,
   queue: string,
   msg: { msg_id: number; message: Record<string, unknown> },
-  reason: string
+  reason: string,
+  errorDetail?: Record<string, unknown>
 ): Promise<void> {
   const payload = msg.message
   await supabase.from('email_send_log').insert({
@@ -48,6 +68,7 @@ async function moveToDlq(
     recipient_email: payload.to,
     status: 'dlq',
     error_message: reason,
+    metadata: errorDetail ? { error: errorDetail } : null,
   })
   const { error } = await supabase.rpc('move_to_dlq', {
     source_queue: queue,
@@ -258,6 +279,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
               totalProcessed++
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : String(error)
+              const errorDetail = toErrorDetail(error, errorMsg.slice(0, 1000))
               console.error('Email send failed', {
                 queue,
                 msg_id: msg.msg_id,
@@ -273,6 +295,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
                   recipient_email: payload.to,
                   status: 'failed',
                   error_message: errorMsg.slice(0, 1000),
+                  metadata: { error: errorDetail },
                 })
 
                 const retryAfterSecs = getRetryAfterSeconds(error)
@@ -293,7 +316,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
               // 403s are permanent configuration or authorization failures for this
               // message, so move straight to DLQ and stop processing the rest of the batch.
               if (isForbidden(error)) {
-                await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
+                await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000), errorDetail)
                 return Response.json({ processed: totalProcessed, stopped: 'forbidden' })
               }
 
@@ -304,6 +327,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
                 recipient_email: payload.to,
                 status: 'failed',
                 error_message: errorMsg.slice(0, 1000),
+                metadata: { error: errorDetail },
               })
               if (payload?.message_id && typeof payload.message_id === 'string') {
                 failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
