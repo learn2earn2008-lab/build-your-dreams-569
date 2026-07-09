@@ -512,6 +512,18 @@ function AlertDetailDialog({
             );
           })()}
         </div>
+        {canRetry && (
+          <div className="flex justify-end border-t px-6 py-4">
+            <Button onClick={() => retry.mutate()} disabled={retry.isPending}>
+              {retry.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              Retry failed
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
