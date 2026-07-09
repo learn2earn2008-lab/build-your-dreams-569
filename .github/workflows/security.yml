@@ -98,3 +98,19 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:javascript-typescript"
+          output: codeql-results
+
+      - name: Upload CodeQL SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: codeql-results/javascript-typescript.sarif
+          category: "/language:javascript-typescript"
+
+      - name: Upload CodeQL SARIF as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: codeql-sarif-${{ github.run_id }}-${{ github.run_attempt }}
+          path: codeql-results/
+          if-no-files-found: ignore
