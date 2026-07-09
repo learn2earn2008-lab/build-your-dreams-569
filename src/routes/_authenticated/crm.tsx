@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute, useNavigate, getRouteApi } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -132,6 +132,11 @@ function CrmPage() {
     { lead: Lead; notification: LeadNotification } | null
   >(null);
 
+  // Leads whose alert status we keep polling until it settles after a retry.
+  const [settlingIds, setSettlingIds] = useState<Set<string>>(new Set());
+  const settleDeadline = useRef(0);
+  const seenPending = useRef<Set<string>>(new Set());
+
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["leads"],
     queryFn: async () => {
@@ -148,6 +153,9 @@ function CrmPage() {
   const { data: notifications = [] } = useQuery({
     queryKey: ["lead-notifications"],
     queryFn: () => fetchNotifications(),
+    // While retried leads are settling, poll so the table converges on their
+    // final Failed/DLQ/Suppressed/Sent status without a manual refresh.
+    refetchInterval: settlingIds.size > 0 ? 2500 : false,
   });
 
   const notifyByLead = useMemo(() => {
@@ -158,6 +166,37 @@ function CrmPage() {
     }
     return map;
   }, [notifications]);
+
+  // Re-evaluate the settling set every time notifications refetch. A retry
+  // writes a fresh `pending` row per lead, which later resolves to
+  // sent/failed/dlq (suppressed sends stay suppressed). Drop a lead from the
+  // set once it reaches a terminal state, and hard-stop at the deadline so the
+  // poll can never run forever.
+  useEffect(() => {
+    if (settlingIds.size === 0) return;
+    if (Date.now() > settleDeadline.current) {
+      setSettlingIds(new Set());
+      return;
+    }
+    setSettlingIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        const s = notifyByLead.get(id)?.status;
+        if (s === "pending") {
+          // Retried send is in flight — keep polling.
+          seenPending.current.add(id);
+          next.add(id);
+        } else if (s === "failed" || s === "dlq") {
+          // Keep waiting until the retried `pending` row lands; once we've seen
+          // it, a failed/dlq status means the retry itself failed (settled).
+          if (!seenPending.current.has(id)) next.add(id);
+        }
+        // sent / suppressed / undefined → settled, so it drops out.
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [notifications, notifyByLead, settlingIds]);
+
 
   const stats = useMemo(() => {
     const total = leads.length;
@@ -226,7 +265,7 @@ function CrmPage() {
   const fetchBulkRetry = useServerFn(retryLeadNotifications);
   const bulkRetry = useMutation({
     mutationFn: (leadIds: string[]) => fetchBulkRetry({ data: { leadIds } }),
-    onSuccess: (r) => {
+    onSuccess: (r, leadIds) => {
       const parts: string[] = [];
       if (r.requeued) parts.push(`${r.requeued} re-queued`);
       if (r.suppressed) parts.push(`${r.suppressed} suppressed`);
@@ -240,6 +279,12 @@ function CrmPage() {
       qc.invalidateQueries({ queryKey: ["leads"] });
       setBulkRetryConfirmOpen(false);
       clearSelection();
+      // Keep polling the notifications until the re-queued sends resolve.
+      if (r.requeued > 0) {
+        seenPending.current = new Set();
+        settleDeadline.current = Date.now() + 30000;
+        setSettlingIds(new Set(leadIds));
+      }
     },
     onError: () => toast.error("Could not re-queue notifications"),
   });
