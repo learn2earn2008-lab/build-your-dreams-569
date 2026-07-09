@@ -330,6 +330,33 @@ function CrmPage() {
           </Select>
         </div>
 
+        {/* Bulk action bar */}
+        {visibleSelectedIds.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+            <span className="text-sm">
+              <span className="font-medium">{visibleSelectedIds.length}</span>{" "}
+              selected
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => bulkRetry.mutate(visibleSelectedIds)}
+                disabled={bulkRetry.isPending}
+              >
+                {bulkRetry.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-4" />
+                )}
+                Retry {visibleSelectedIds.length} failed
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="mt-4 overflow-hidden rounded-xl border bg-card">
           <Table>
