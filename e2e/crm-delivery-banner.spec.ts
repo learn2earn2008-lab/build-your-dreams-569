@@ -514,6 +514,49 @@ test("deselecting all originally selected leads mid-poll keeps the banner scoped
   await expect(banner).toBeHidden({ timeout: 15_000 });
 });
 
+test("deselecting one originally retried lead mid-poll keeps the banner up until the OTHER retried lead settles", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Retry Ada + Bea. Ada reports "failed" for the first few polls (so its
+  // checkbox stays visible and we can deselect it), then settles to "sent"
+  // early (poll >= 3 ≈ 7.5s). Bea stays "pending" much longer and only settles
+  // at poll >= 7 (≈ 17.5s). Cyd is never retried and stays "failed" throughout.
+  await installMocks(page, THREE_LEADS, (lead, { retried, poll }) => {
+    if (!retried) return "failed"; // Cyd: never retried
+    if (lead.id === ada.id) return poll >= 3 ? "sent" : "failed"; // settles early
+    return poll >= 7 ? "sent" : "pending"; // bea settles late
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // The bulk retry cleared the selection. Re-select Ada (still retryable while
+  // "failed"), then deselect it — simulating the user removing exactly ONE of
+  // the two originally retried leads mid-poll.
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(banner).toBeVisible();
+
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await expect(page.getByText("selected")).toBeHidden();
+  await expect(banner).toBeVisible();
+
+  // Ada settles to "sent" early, but Bea is still in flight: the banner is
+  // scoped to BOTH originally retried leads, so it must stay up while Bea
+  // remains pending — the mid-poll deselection of Ada changes nothing.
+  await page.waitForTimeout(11_000);
+  await expect(banner).toBeVisible();
+
+  // Only once the remaining retried lead (Bea) finally settles does the banner
+  // clear.
+  await expect(banner).toBeHidden({ timeout: 20_000 });
+});
+
+
 
 
 
