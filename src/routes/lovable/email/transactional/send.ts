@@ -1,8 +1,6 @@
 import * as React from 'react'
-import { render } from '@react-email/render'
 import { createClient } from '@supabase/supabase-js'
 import { createFileRoute } from '@tanstack/react-router'
-import { TEMPLATES } from '@/lib/email-templates/registry'
 
 // Configuration baked in at scaffold time
 const SITE_NAME = "Your Next Big Idea"
@@ -88,7 +86,10 @@ export const Route = createFileRoute("/lovable/email/transactional/send")({
           )
         }
 
-        // 1. Look up template from registry (early — needed to resolve recipient)
+        // 1. Look up template from registry (early — needed to resolve recipient).
+        // Keep email-only modules out of route module scope so TanStack route
+        // discovery never tries to resolve them during app planning.
+        const { TEMPLATES } = await import('@/lib/email-templates/registry')
         const template = TEMPLATES[templateName]
 
         if (!template) {
@@ -252,6 +253,7 @@ export const Route = createFileRoute("/lovable/email/transactional/send")({
         }
 
         // 4. Render React Email template to HTML and plain text
+        const { render } = await import('@react-email/render')
         const element = React.createElement(template.component, templateData)
         const html = await render(element)
         const plainText = await render(element, { plainText: true })
