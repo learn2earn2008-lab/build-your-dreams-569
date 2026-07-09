@@ -327,13 +327,32 @@ function CrmPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       {(() => {
-                        const s = notifyState(notifyByLead.get(lead.id));
-                        return (
+                        const n = notifyByLead.get(lead.id);
+                        const s = notifyState(n?.status);
+                        const hasError =
+                          !!n &&
+                          (n.status === "failed" ||
+                            n.status === "dlq" ||
+                            n.status === "suppressed");
+                        const badge = (
                           <Badge variant="secondary" className={s.className}>
                             {s.label}
                           </Badge>
+                        );
+                        if (!hasError) return badge;
+                        return (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            onClick={() =>
+                              setAlertDetail({ lead, notification: n })
+                            }
+                          >
+                            {badge}
+                            <Info className="size-3.5 text-muted-foreground" />
+                          </button>
                         );
                       })()}
                     </TableCell>
