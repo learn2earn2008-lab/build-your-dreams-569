@@ -241,7 +241,9 @@ function CrmPage() {
           <Select
             value={notify}
             onValueChange={(v) =>
-              navigate({ search: (prev) => ({ ...prev, notify: v }) })
+              navigate({
+                search: (prev: { notify: string }) => ({ ...prev, notify: v }),
+              })
             }
           >
             <SelectTrigger className="sm:w-48">
