@@ -194,6 +194,28 @@ async function retryAllLeads(page: Page, leads: LeadSpec[]) {
   await page.getByRole("alertdialog").getByRole("button", { name: label }).click();
 }
 
+/**
+ * Selects only the given subset of leads via their individual row checkboxes
+ * (NOT "select all") and confirms the bulk retry dialog. Verifies the toolbar
+ * count reflects the selected set before retrying.
+ */
+async function retrySelectedLeads(page: Page, leads: LeadSpec[], subset: LeadSpec[]) {
+  await page.goto("/crm?notify=all");
+
+  // Wait until leads + "failed" notifications have loaded (checkboxes exist).
+  await page.getByLabel(`Select ${leads[0].name}`).waitFor({ timeout: 15_000 });
+
+  for (const lead of subset) {
+    await page.getByLabel(`Select ${lead.name}`).click();
+  }
+
+  // The toolbar + button counts must match the selected subset, not all leads.
+  const label = `Retry ${subset.length} failed`;
+  await page.getByText(`${subset.length} selected`).waitFor();
+  await page.getByRole("button", { name: label }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: label }).click();
+}
+
 const ONE_LEAD: LeadSpec[] = [
   { id: "11111111-1111-1111-1111-111111111111", name: "Ada Retryable", email: "ada@example.com" },
 ];
