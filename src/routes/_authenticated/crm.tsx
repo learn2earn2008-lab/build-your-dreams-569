@@ -131,10 +131,10 @@ function CrmPage() {
   });
 
   const notifyByLead = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, LeadNotification>();
     // notifications come newest-first; keep the first (latest) per lead.
     for (const n of notifications) {
-      if (n.lead_id && !map.has(n.lead_id)) map.set(n.lead_id, n.status);
+      if (n.lead_id && !map.has(n.lead_id)) map.set(n.lead_id, n);
     }
     return map;
   }, [notifications]);
