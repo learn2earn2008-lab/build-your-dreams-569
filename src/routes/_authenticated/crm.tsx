@@ -27,6 +27,7 @@ import { PIPELINE_STAGES } from "@/lib/site-config";
 import {
   getLeadNotifications,
   retryLeadNotification,
+  retryLeadNotifications,
   type LeadNotification,
 } from "@/lib/leads.functions";
 import { Button } from "@/components/ui/button";
