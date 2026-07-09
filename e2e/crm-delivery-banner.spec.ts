@@ -309,3 +309,54 @@ test("multi-lead: banner clears at 30s when one retried lead never settles", asy
   // The 30-second hard deadline eventually clears it regardless.
   await expect(banner).toBeHidden({ timeout: 25_000 });
 });
+
+test("selected subset: banner tracks only the retried leads, ignoring the rest", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // We will select only Ada and Bea. Cyd is left un-selected and NEVER settles
+  // (stays "pending") — proving an un-selected in-flight lead does not keep the
+  // banner up. Ada and Bea settle to "sent" once they've been retried.
+  await installMocks(page, THREE_LEADS, (lead, { poll }) => {
+    if (lead.id === cyd.id) return "pending"; // un-selected, never in the set
+    return poll >= 2 ? "sent" : "pending"; // ada & bea (selected)
+  });
+
+  // Retry only Ada and Bea via their row checkboxes (not "select all").
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // Even though Cyd stays pending the whole time, the banner clears once the
+  // two SELECTED leads settle — the settling set is exactly the retried subset.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
+
+test("selected subset: banner stays until the selected lead settles", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Select only Cyd. Cyd stays "pending" until poll >= 5 (≈ 10s); Ada and Bea
+  // are un-selected and would "sent" immediately, but they're not in the set,
+  // so only Cyd's status governs the banner.
+  await installMocks(page, THREE_LEADS, (lead, { poll }) => {
+    if (lead.id === cyd.id) return poll >= 5 ? "sent" : "pending";
+    return "sent"; // ada & bea (un-selected)
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [cyd]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // Well before Cyd settles the banner must still be up despite the others.
+  await page.waitForTimeout(6_000);
+  await expect(banner).toBeVisible();
+
+  // Once Cyd finally settles, the banner clears.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
+
