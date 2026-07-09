@@ -2,6 +2,9 @@ import { createServerFn } from '@tanstack/react-start'
 
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware'
 
+export type RetryResult = { success: boolean; reason?: string }
+
+
 export type LeadNotificationError = {
   message?: string
   status?: number | string
