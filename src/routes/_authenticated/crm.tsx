@@ -154,7 +154,7 @@ function CrmPage() {
         !q ||
         l.name.toLowerCase().includes(q) ||
         l.email.toLowerCase().includes(q);
-      const status = notifyByLead.get(l.id);
+      const status = notifyByLead.get(l.id)?.status;
       const matchesNotify =
         notify === "all" ||
         (notify === "none" && !status) ||
