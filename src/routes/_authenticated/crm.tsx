@@ -175,6 +175,64 @@ function CrmPage() {
     });
   }, [leads, search, stageFilter, notify, notifyByLead]);
 
+  // A lead can be re-queued when its latest alert failed, hit the DLQ, or was
+  // suppressed.
+  const isRetryable = (leadId: string) => {
+    const s = notifyByLead.get(leadId)?.status;
+    return s === "failed" || s === "dlq" || s === "suppressed";
+  };
+
+  const retryableFiltered = useMemo(
+    () => filtered.filter((l) => isRetryable(l.id)),
+    [filtered, notifyByLead],
+  );
+
+  // Keep the selection in sync with what's actually retryable and visible.
+  const visibleSelectedIds = useMemo(
+    () => retryableFiltered.filter((l) => selectedIds.has(l.id)).map((l) => l.id),
+    [retryableFiltered, selectedIds],
+  );
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) => {
+      const allSelected =
+        retryableFiltered.length > 0 &&
+        retryableFiltered.every((l) => prev.has(l.id));
+      if (allSelected) return new Set();
+      return new Set(retryableFiltered.map((l) => l.id));
+    });
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const fetchBulkRetry = useServerFn(retryLeadNotifications);
+  const bulkRetry = useMutation({
+    mutationFn: (leadIds: string[]) => fetchBulkRetry({ data: { leadIds } }),
+    onSuccess: (r) => {
+      const parts: string[] = [];
+      if (r.requeued) parts.push(`${r.requeued} re-queued`);
+      if (r.suppressed) parts.push(`${r.suppressed} suppressed`);
+      if (r.failed) parts.push(`${r.failed} failed`);
+      if (r.requeued > 0) {
+        toast.success(parts.join(" · ") || "Done");
+      } else {
+        toast.error(parts.join(" · ") || "Nothing was re-queued");
+      }
+      qc.invalidateQueries({ queryKey: ["lead-notifications"] });
+      clearSelection();
+    },
+    onError: () => toast.error("Could not re-queue notifications"),
+  });
+
+
+
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("leads").update({ status }).eq("id", id);
