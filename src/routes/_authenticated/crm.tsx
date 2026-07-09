@@ -17,6 +17,7 @@ import {
   Loader2,
   Send,
   StickyNote,
+  Info,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
