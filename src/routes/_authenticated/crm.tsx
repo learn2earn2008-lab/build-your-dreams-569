@@ -151,9 +151,17 @@ function CrmPage() {
         !q ||
         l.name.toLowerCase().includes(q) ||
         l.email.toLowerCase().includes(q);
-      return matchesStage && matchesSearch;
+      const status = notifyByLead.get(l.id);
+      const matchesNotify =
+        notify === "all" ||
+        (notify === "none" && !status) ||
+        (notify === "queued" && status === "pending") ||
+        (notify === "sent" && status === "sent") ||
+        (notify === "failed" && (status === "failed" || status === "dlq")) ||
+        (notify === "suppressed" && status === "suppressed");
+      return matchesStage && matchesSearch && matchesNotify;
     });
-  }, [leads, search, stageFilter]);
+  }, [leads, search, stageFilter, notify, notifyByLead]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
