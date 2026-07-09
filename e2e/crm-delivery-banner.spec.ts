@@ -556,6 +556,53 @@ test("deselecting one originally retried lead mid-poll keeps the banner up until
   await expect(banner).toBeHidden({ timeout: 20_000 });
 });
 
+test("reselecting a retried lead after deselecting it mid-poll leaves the banner scoped to both retried leads", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Retry Ada + Bea. Ada reports "failed" for the first few polls (so its
+  // checkbox stays visible to deselect AND reselect), then settles to "sent"
+  // early (poll >= 4 ≈ 10s). Bea stays "pending" longer, only settling at
+  // poll >= 7 (≈ 17.5s). Cyd is never retried and stays "failed" throughout.
+  await installMocks(page, THREE_LEADS, (lead, { retried, poll }) => {
+    if (!retried) return "failed"; // Cyd: never retried
+    if (lead.id === ada.id) return poll >= 4 ? "sent" : "failed"; // settles early
+    return poll >= 7 ? "sent" : "pending"; // bea settles late
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // The bulk retry cleared the selection. Re-select Ada (still retryable while
+  // "failed"), deselect it, then reselect it — the checkbox goes off and back
+  // on while both leads are still settling.
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(banner).toBeVisible();
+
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await expect(page.getByText("selected")).toBeHidden();
+  await expect(banner).toBeVisible();
+
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(banner).toBeVisible();
+
+  // Ada settles to "sent" early, but Bea is still pending: the banner is scoped
+  // to the originally retried set and must stay up while any of them is in
+  // flight — the deselect/reselect cycle changes nothing.
+  await page.waitForTimeout(11_000);
+  await expect(banner).toBeVisible();
+
+  // Only once BOTH originally retried leads have settled (Bea last) does the
+  // banner clear.
+  await expect(banner).toBeHidden({ timeout: 20_000 });
+});
+
+
 
 
 
