@@ -3,10 +3,10 @@
 export const siteConfig = {
   brand: "Freedom Legacy Elevation Group",
   brandShort: "Freedom Legacy",
-  // Direct download link to your eBook PDF (e.g. a public storage / Google Drive link).
-  ebookDownloadUrl: "#",
-  // Your scheduling link for the free 30-minute discovery call (e.g. Calendly).
-  discoveryCallUrl: "https://calendly.com/",
+  // The eBook is bundled as an app asset — see src/routes/thank-you.tsx.
+  ebookDownloadUrl: "/thank-you",
+  // Scheduling link for the free 15-minute discovery call.
+  discoveryCallUrl: "http://calendar.freedomlegacyelevationgroup.com",
   // Sign-up link for the free 7-day AI platform trial.
   aiTrialUrl: "#",
   supportEmail: "hello@freedomlegacyelevationgroup.com",
