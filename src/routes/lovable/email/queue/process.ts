@@ -39,15 +39,17 @@ function getRetryAfterSeconds(error: unknown): number {
 // HTTP status/code, and any response body for failed/suppressed alerts.
 function toErrorDetail(error: unknown, message: string): Record<string, unknown> {
   const detail: Record<string, unknown> = { message }
+  const asText = (v: unknown): string =>
+    typeof v === 'string' ? v : JSON.stringify(v)
   if (error && typeof error === 'object') {
     const e = error as Record<string, unknown>
     if ('status' in e && e.status != null) detail.status = e.status
     if ('code' in e && e.code != null) detail.code = e.code
     if ('retryAfterSeconds' in e && e.retryAfterSeconds != null)
       detail.retry_after_seconds = e.retryAfterSeconds
-    if ('body' in e && e.body != null) detail.body = e.body
-    if ('responseBody' in e && e.responseBody != null) detail.body = e.responseBody
-    if ('response' in e && e.response != null) detail.response = e.response
+    if ('body' in e && e.body != null) detail.body = asText(e.body)
+    if ('responseBody' in e && e.responseBody != null) detail.body = asText(e.responseBody)
+    if ('response' in e && e.response != null) detail.response = asText(e.response)
   }
   return detail
 }
