@@ -237,6 +237,7 @@ function CrmPage() {
         toast.error(parts.join(" · ") || "Nothing was re-queued");
       }
       qc.invalidateQueries({ queryKey: ["lead-notifications"] });
+      setBulkRetryConfirmOpen(false);
       clearSelection();
     },
     onError: () => toast.error("Could not re-queue notifications"),
