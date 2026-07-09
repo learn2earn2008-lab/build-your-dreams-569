@@ -18,6 +18,7 @@ import {
   Send,
   StickyNote,
   Info,
+  RotateCcw,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
