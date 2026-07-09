@@ -1,4 +1,5 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
+import { toCrossJSONAsync } from "seroval";
 
 /**
  * End-to-end coverage for the /crm "Checking delivery status…" banner.
