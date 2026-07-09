@@ -29,8 +29,9 @@ function ThankYou() {
       title: "Download Your Free eBook",
       body: "Your copy of The Freedom Legacy Framework is ready. Grab it now and start with Pillar 1.",
       cta: "Download the Framework",
-      href: siteConfig.ebookDownloadUrl,
+      href: ebookPdf.url,
       primary: true,
+      download: "The-Freedom-Legacy-Framework.pdf",
     },
     {
       icon: CalendarClock,
