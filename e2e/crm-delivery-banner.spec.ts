@@ -142,25 +142,36 @@ async function installMocks(
 
   // TanStack server functions: `/ln/*` in production builds, `/_serverFn/*`
   // under the Vite dev server. GET -> getLeadNotifications, POST -> retry.
-  let retried = false;
+  // Tracks which leads have actually been re-queued. The retry POST body
+  // carries the selected lead ids, so we can settle only the selected subset
+  // and leave un-selected leads untouched — exactly what the CRM does.
+  const retriedIds = new Set<string>();
   let poll = 0;
   const serverFn = (route: Route) => {
     if (route.request().method() === "POST") {
-      retried = true;
-      // Every selected lead is re-queued so the settling window opens.
+      // The server-fn POST body embeds the selected lead ids (regardless of
+      // encoding), so match known ids against the raw payload.
+      const raw = route.request().postData() ?? "";
+      for (const lead of leads) if (raw.includes(lead.id)) retriedIds.add(lead.id);
       return serverFnJson(route, {
-        requeued: leads.length,
+        requeued: retriedIds.size,
         suppressed: 0,
         failed: 0,
         notFound: 0,
       });
     }
-    if (retried) poll += 1;
-    const rows = leads.map((lead) =>
-      notification(lead, retried ? status(lead, { retried, poll }) : "failed"),
-    );
+    if (retriedIds.size > 0) poll += 1;
+    const rows = leads.map((lead) => {
+      const retried = retriedIds.has(lead.id);
+      // Before any retry every lead is "failed" (retryable + selectable). After
+      // a retry the resolver drives status; `retried` tells it whether THIS
+      // lead was part of the selected set.
+      const s = retriedIds.size > 0 ? status(lead, { retried, poll }) : "failed";
+      return notification(lead, s);
+    });
     return serverFnJson(route, rows);
   };
+
   await page.route("**/_serverFn/**", serverFn);
   await page.route("**/ln/**", serverFn);
 }
@@ -179,6 +190,28 @@ async function retryAllLeads(page: Page, leads: LeadSpec[]) {
   await page.getByLabel("Select all retryable leads").click();
 
   const label = `Retry ${leads.length} failed`;
+  await page.getByRole("button", { name: label }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: label }).click();
+}
+
+/**
+ * Selects only the given subset of leads via their individual row checkboxes
+ * (NOT "select all") and confirms the bulk retry dialog. Verifies the toolbar
+ * count reflects the selected set before retrying.
+ */
+async function retrySelectedLeads(page: Page, leads: LeadSpec[], subset: LeadSpec[]) {
+  await page.goto("/crm?notify=all");
+
+  // Wait until leads + "failed" notifications have loaded (checkboxes exist).
+  await page.getByLabel(`Select ${leads[0].name}`).waitFor({ timeout: 15_000 });
+
+  for (const lead of subset) {
+    await page.getByLabel(`Select ${lead.name}`).click();
+  }
+
+  // The toolbar + button counts must match the selected subset, not all leads.
+  const label = `Retry ${subset.length} failed`;
+  await page.getByText(`${subset.length} selected`).waitFor();
   await page.getByRole("button", { name: label }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: label }).click();
 }
@@ -276,3 +309,54 @@ test("multi-lead: banner clears at 30s when one retried lead never settles", asy
   // The 30-second hard deadline eventually clears it regardless.
   await expect(banner).toBeHidden({ timeout: 25_000 });
 });
+
+test("selected subset: banner tracks only the retried leads, ignoring the rest", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // We will select only Ada and Bea. Cyd is left un-selected and NEVER settles
+  // (stays "pending") — proving an un-selected in-flight lead does not keep the
+  // banner up. Ada and Bea settle to "sent" once they've been retried.
+  await installMocks(page, THREE_LEADS, (lead, { poll }) => {
+    if (lead.id === cyd.id) return "pending"; // un-selected, never in the set
+    return poll >= 2 ? "sent" : "pending"; // ada & bea (selected)
+  });
+
+  // Retry only Ada and Bea via their row checkboxes (not "select all").
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // Even though Cyd stays pending the whole time, the banner clears once the
+  // two SELECTED leads settle — the settling set is exactly the retried subset.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
+
+test("selected subset: banner stays until the selected lead settles", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Select only Cyd. Cyd stays "pending" until poll >= 5 (≈ 10s); Ada and Bea
+  // are un-selected and would "sent" immediately, but they're not in the set,
+  // so only Cyd's status governs the banner.
+  await installMocks(page, THREE_LEADS, (lead, { poll }) => {
+    if (lead.id === cyd.id) return poll >= 5 ? "sent" : "pending";
+    return "sent"; // ada & bea (un-selected)
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [cyd]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // Well before Cyd settles the banner must still be up despite the others.
+  await page.waitForTimeout(6_000);
+  await expect(banner).toBeVisible();
+
+  // Once Cyd finally settles, the banner clears.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
+
