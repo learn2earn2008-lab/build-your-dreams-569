@@ -32,12 +32,16 @@ export const Route = createFileRoute('/api/public/leads')({
         const supabase = createClient(supabaseUrl, serviceKey)
         const source = parsed.source || 'landing_page'
 
-        const { error: insertError } = await supabase.from('leads').insert({
-          name: parsed.name,
-          email: parsed.email,
-          phone: parsed.phone || null,
-          source,
-        })
+        const { data: inserted, error: insertError } = await supabase
+          .from('leads')
+          .insert({
+            name: parsed.name,
+            email: parsed.email,
+            phone: parsed.phone || null,
+            source,
+          })
+          .select('id')
+          .single()
 
         if (insertError) {
           console.error('Failed to insert lead', { error: insertError })
@@ -52,6 +56,12 @@ export const Route = createFileRoute('/api/public/leads')({
             templateName: 'new-lead-notification',
             recipientEmail: siteConfig.leadNotificationEmail,
             idempotencyKey: `new-lead-${parsed.email.toLowerCase()}-${Date.now()}`,
+            metadata: {
+              lead_id: inserted.id,
+              lead_email: parsed.email,
+              lead_name: parsed.name,
+              source,
+            },
             templateData: {
               name: parsed.name,
               email: parsed.email,
@@ -69,6 +79,7 @@ export const Route = createFileRoute('/api/public/leads')({
         } catch (err) {
           console.error('Lead notification dispatch threw', { error: err })
         }
+
 
         return Response.json({ success: true })
       },
