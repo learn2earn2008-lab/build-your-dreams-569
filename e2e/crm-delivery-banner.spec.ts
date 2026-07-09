@@ -360,3 +360,47 @@ test("selected subset: banner stays until the selected lead settles", async ({
   await expect(banner).toBeHidden({ timeout: 15_000 });
 });
 
+test("toggling a checkbox during polling updates the selection, not the banner", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Retry Ada + Bea; they stay "pending" until poll >= 5 (≈ 12.5s), so the
+  // banner stays up long enough to interact. Cyd is never retried and stays
+  // "failed" — so it remains retryable and keeps its row checkbox throughout
+  // polling, which is the checkbox we toggle.
+  await installMocks(page, THREE_LEADS, (lead, { retried, poll }) => {
+    if (!retried) return "failed"; // Cyd: still retryable / selectable
+    return poll >= 5 ? "sent" : "pending"; // ada & bea
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // The retry cleared the prior selection, so no bulk bar is showing yet.
+  await expect(page.getByText("1 selected")).toBeHidden();
+
+  // Toggle Cyd ON mid-poll: the selection toolbar reacts to the NEW selected
+  // set (1 lead), but the banner still tracks the retried set (Ada + Bea).
+  await page.getByLabel(`Select ${cyd.name}`).click();
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry 1 failed" }),
+  ).toBeVisible();
+  await expect(banner).toBeVisible();
+
+  // Toggle Cyd OFF again: the toolbar collapses to match the now-empty
+  // selection, and the banner is still unaffected — it is not driven by the
+  // checkbox selection.
+  await page.getByLabel(`Select ${cyd.name}`).click();
+  await expect(page.getByText("1 selected")).toBeHidden();
+  await expect(banner).toBeVisible();
+
+  // The banner clears only when the originally retried leads settle, regardless
+  // of any checkbox toggling that happened in between.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
+
+
