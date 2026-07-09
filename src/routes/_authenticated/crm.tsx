@@ -76,6 +76,24 @@ const stageStyles: Record<string, string> = {
   lost: "bg-muted text-muted-foreground",
 };
 
+type NotifyState = { label: string; className: string };
+
+function notifyState(status: string | undefined): NotifyState {
+  switch (status) {
+    case "sent":
+      return { label: "Sent", className: "bg-emerald-500/15 text-emerald-600" };
+    case "pending":
+      return { label: "Queued", className: "bg-chart-2/15 text-chart-2" };
+    case "failed":
+    case "dlq":
+      return { label: "Failed", className: "bg-destructive/15 text-destructive" };
+    case "suppressed":
+      return { label: "Suppressed", className: "bg-muted text-muted-foreground" };
+    default:
+      return { label: "—", className: "bg-muted text-muted-foreground" };
+  }
+}
+
 function CrmPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
