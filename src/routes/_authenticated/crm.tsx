@@ -362,6 +362,17 @@ function CrmPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    aria-label="Select all retryable leads"
+                    disabled={retryableFiltered.length === 0}
+                    checked={
+                      retryableFiltered.length > 0 &&
+                      retryableFiltered.every((l) => selectedIds.has(l.id))
+                    }
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">Contact</TableHead>
                 <TableHead className="hidden sm:table-cell">Source</TableHead>
@@ -373,13 +384,13 @@ function CrmPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto size-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
                     No leads yet. Share your landing page to start collecting them.
                   </TableCell>
                 </TableRow>
@@ -390,6 +401,15 @@ function CrmPage() {
                     className="cursor-pointer"
                     onClick={() => setSelected(lead)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {isRetryable(lead.id) ? (
+                        <Checkbox
+                          aria-label={`Select ${lead.name}`}
+                          checked={selectedIds.has(lead.id)}
+                          onCheckedChange={() => toggleSelected(lead.id)}
+                        />
+                      ) : null}
+                    </TableCell>
                     <TableCell className="font-medium">{lead.name}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                       {lead.email}
