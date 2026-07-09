@@ -233,6 +233,7 @@ function CrmPage() {
                 <TableHead className="hidden md:table-cell">Contact</TableHead>
                 <TableHead className="hidden sm:table-cell">Source</TableHead>
                 <TableHead>Stage</TableHead>
+                <TableHead>Alert</TableHead>
                 <TableHead className="hidden lg:table-cell">Added</TableHead>
               </TableRow>
             </TableHeader>
