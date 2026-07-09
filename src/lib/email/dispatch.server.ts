@@ -151,6 +151,7 @@ export async function dispatchTransactionalEmail(
       recipient_email: effectiveRecipient,
       status: 'failed',
       error_message: 'Failed to enqueue email',
+      metadata,
     })
     return { success: false, reason: 'enqueue_failed' }
   }
