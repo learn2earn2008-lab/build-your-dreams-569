@@ -1,9 +1,11 @@
-# Security scan gate for pull requests.
+# Security scan gate for pull requests and pushes to main.
 #
 # What this enforces in CI:
 #   - A dependency vulnerability audit (npm audit) against the committed
 #     lockfile. The job fails the PR if any HIGH or CRITICAL advisory is found,
 #     matching the severity bar Lovable's dependency scanner uses.
+#   - A secret scan (TruffleHog) that fails the build if any verified leaked
+#     credentials are detected in the repository or in the PR diff.
 #
 # What CANNOT run here:
 #   - Lovable's backend/RLS security scanner and the Supabase database linter
@@ -50,3 +52,22 @@ jobs:
       # blocking the PR until dependencies are upgraded.
       - name: Audit dependencies (fail on high/critical)
         run: npm audit --audit-level=high
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for leaked secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          # For PRs, scan only the commits introduced by the branch. For pushes
+          # to main, scan the entire repository history.
+          base: ${{ github.event.pull_request.base.sha || '' }}
+          head: ${{ github.event.pull_request.head.sha || github.sha }}
+          extra_args: --only-verified
