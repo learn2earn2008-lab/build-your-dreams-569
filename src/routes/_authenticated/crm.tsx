@@ -52,6 +52,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -117,6 +127,7 @@ function CrmPage() {
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRetryConfirmOpen, setBulkRetryConfirmOpen] = useState(false);
   const [alertDetail, setAlertDetail] = useState<
     { lead: Lead; notification: LeadNotification } | null
   >(null);
@@ -343,7 +354,7 @@ function CrmPage() {
               </Button>
               <Button
                 size="sm"
-                onClick={() => bulkRetry.mutate(visibleSelectedIds)}
+                onClick={() => setBulkRetryConfirmOpen(true)}
                 disabled={bulkRetry.isPending}
               >
                 {bulkRetry.isPending ? (
@@ -480,6 +491,37 @@ function CrmPage() {
           </Table>
         </div>
       </main>
+
+      <AlertDialog open={bulkRetryConfirmOpen} onOpenChange={setBulkRetryConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-queue {visibleSelectedIds.length} notifications?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will send a new new-lead alert for each selected lead. Suppressed
+              addresses will still be skipped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBulkRetryConfirmOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                bulkRetry.mutate(visibleSelectedIds);
+                setBulkRetryConfirmOpen(false);
+              }}
+              disabled={bulkRetry.isPending}
+            >
+              {bulkRetry.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              Retry {visibleSelectedIds.length} failed
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {selected && (
         <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
