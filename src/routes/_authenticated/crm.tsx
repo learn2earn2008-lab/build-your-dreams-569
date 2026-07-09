@@ -288,6 +288,16 @@ function CrmPage() {
                         </SelectContent>
                       </Select>
                     </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const s = notifyState(notifyByLead.get(lead.id));
+                        return (
+                          <Badge variant="secondary" className={s.className}>
+                            {s.label}
+                          </Badge>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                       {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
                     </TableCell>
