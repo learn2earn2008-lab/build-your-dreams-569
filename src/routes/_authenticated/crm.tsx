@@ -265,7 +265,7 @@ function CrmPage() {
   const fetchBulkRetry = useServerFn(retryLeadNotifications);
   const bulkRetry = useMutation({
     mutationFn: (leadIds: string[]) => fetchBulkRetry({ data: { leadIds } }),
-    onSuccess: (r) => {
+    onSuccess: (r, leadIds) => {
       const parts: string[] = [];
       if (r.requeued) parts.push(`${r.requeued} re-queued`);
       if (r.suppressed) parts.push(`${r.suppressed} suppressed`);
@@ -279,6 +279,12 @@ function CrmPage() {
       qc.invalidateQueries({ queryKey: ["leads"] });
       setBulkRetryConfirmOpen(false);
       clearSelection();
+      // Keep polling the notifications until the re-queued sends resolve.
+      if (r.requeued > 0) {
+        seenPending.current = new Set();
+        settleDeadline.current = Date.now() + 30000;
+        setSettlingIds(new Set(leadIds));
+      }
     },
     onError: () => toast.error("Could not re-queue notifications"),
   });
