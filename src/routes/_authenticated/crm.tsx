@@ -507,10 +507,7 @@ function CrmPage() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                bulkRetry.mutate(visibleSelectedIds);
-                setBulkRetryConfirmOpen(false);
-              }}
+              onClick={() => bulkRetry.mutate(visibleSelectedIds)}
               disabled={bulkRetry.isPending}
             >
               {bulkRetry.isPending ? (
