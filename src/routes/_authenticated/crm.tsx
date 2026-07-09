@@ -47,7 +47,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+const notifyFilterSchema = z.object({
+  notify: fallback(z.string(), "all").default("all"),
+});
+
 export const Route = createFileRoute("/_authenticated/crm")({
+  validateSearch: zodValidator(notifyFilterSchema),
   component: CrmPage,
 });
 
