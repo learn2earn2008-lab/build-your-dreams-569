@@ -4,6 +4,7 @@ import { Download, CalendarClock, Sparkles, CheckCircle2, ArrowRight } from "luc
 import { SiteFooter } from "@/components/landing/SiteChrome";
 import { siteConfig } from "@/lib/site-config";
 import ebookCover from "@/assets/ebook-cover.png";
+import ebookPdf from "@/assets/freedom-legacy-framework.pdf.asset.json";
 
 export const Route = createFileRoute("/thank-you")({
   head: () => ({
@@ -28,8 +29,9 @@ function ThankYou() {
       title: "Download Your Free eBook",
       body: "Your copy of The Freedom Legacy Framework is ready. Grab it now and start with Pillar 1.",
       cta: "Download the Framework",
-      href: siteConfig.ebookDownloadUrl,
+      href: ebookPdf.url,
       primary: true,
+      download: "The-Freedom-Legacy-Framework.pdf",
     },
     {
       icon: CalendarClock,
@@ -98,6 +100,7 @@ function ThankYou() {
                 href={s.href}
                 target={s.href.startsWith("http") ? "_blank" : undefined}
                 rel="noreferrer"
+                download={"download" in s ? s.download : undefined}
                 className={`mt-5 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-colors ${
                   s.primary
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
