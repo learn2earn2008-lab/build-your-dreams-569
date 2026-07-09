@@ -277,6 +277,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
               totalProcessed++
             } catch (error) {
               const errorMsg = error instanceof Error ? error.message : String(error)
+              const errorDetail = toErrorDetail(error, errorMsg.slice(0, 1000))
               console.error('Email send failed', {
                 queue,
                 msg_id: msg.msg_id,
@@ -292,6 +293,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
                   recipient_email: payload.to,
                   status: 'failed',
                   error_message: errorMsg.slice(0, 1000),
+                  metadata: { error: errorDetail },
                 })
 
                 const retryAfterSecs = getRetryAfterSeconds(error)
@@ -312,7 +314,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
               // 403s are permanent configuration or authorization failures for this
               // message, so move straight to DLQ and stop processing the rest of the batch.
               if (isForbidden(error)) {
-                await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000))
+                await moveToDlq(supabase, queue, msg, errorMsg.slice(0, 1000), errorDetail)
                 return Response.json({ processed: totalProcessed, stopped: 'forbidden' })
               }
 
@@ -323,6 +325,7 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
                 recipient_email: payload.to,
                 status: 'failed',
                 error_message: errorMsg.slice(0, 1000),
+                metadata: { error: errorDetail },
               })
               if (payload?.message_id && typeof payload.message_id === 'string') {
                 failedAttemptsByMessageId.set(payload.message_id, failedAttempts + 1)
