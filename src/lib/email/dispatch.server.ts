@@ -73,6 +73,7 @@ export async function dispatchTransactionalEmail(
       template_name: templateName,
       recipient_email: effectiveRecipient,
       status: 'suppressed',
+      metadata,
     })
     return { success: false, reason: 'email_suppressed' }
   }
