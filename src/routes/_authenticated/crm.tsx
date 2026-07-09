@@ -22,7 +22,7 @@ import { formatDistanceToNow } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PIPELINE_STAGES } from "@/lib/site-config";
-import { getLeadNotifications } from "@/lib/leads.functions";
+import { getLeadNotifications, type LeadNotification } from "@/lib/leads.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
