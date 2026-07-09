@@ -354,7 +354,7 @@ function CrmPage() {
               </Button>
               <Button
                 size="sm"
-                onClick={() => bulkRetry.mutate(visibleSelectedIds)}
+                onClick={() => setBulkRetryConfirmOpen(true)}
                 disabled={bulkRetry.isPending}
               >
                 {bulkRetry.isPending ? (
