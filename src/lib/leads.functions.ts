@@ -2,6 +2,9 @@ import { createServerFn } from '@tanstack/react-start'
 
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware'
 
+export type RetryResult = { success: boolean; reason?: string }
+
+
 export type LeadNotificationError = {
   message?: string
   status?: number | string
@@ -82,4 +85,53 @@ export const getLeadNotifications = createServerFn({ method: 'GET' })
     }
 
     return order.map((k) => byMessage.get(k)!)
+  })
+
+/**
+ * Re-queues the new-lead notification for a single lead after a failed or
+ * suppressed send. Runs as an authenticated team member; reads the lead with
+ * the admin client (leads/email_send_log are service-role only) and dispatches
+ * a fresh send with a unique idempotency key so the queue treats it as new.
+ */
+export const retryLeadNotification = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { leadId: string }) => data)
+  .handler(async ({ data }): Promise<RetryResult> => {
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
+    const { dispatchTransactionalEmail } = await import('@/lib/email/dispatch.server')
+    const { siteConfig } = await import('@/lib/site-config')
+
+    const { data: lead, error } = await supabaseAdmin
+      .from('leads')
+      .select('id, name, email, phone, source')
+      .eq('id', data.leadId)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!lead) return { success: false, reason: 'lead_not_found' }
+
+    const result = await dispatchTransactionalEmail(supabaseAdmin, {
+      templateName: 'new-lead-notification',
+      recipientEmail: siteConfig.leadNotificationEmail,
+      idempotencyKey: `new-lead-retry-${lead.email.toLowerCase()}-${Date.now()}`,
+      metadata: {
+        lead_id: lead.id,
+        lead_email: lead.email,
+        lead_name: lead.name,
+        source: lead.source,
+        retried: true,
+      },
+      templateData: {
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone || undefined,
+        source: lead.source,
+        submittedAt: new Date().toLocaleString('en-US', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }),
+      },
+    })
+
+    return { success: result.success, reason: result.reason }
   })

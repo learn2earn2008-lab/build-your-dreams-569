@@ -18,12 +18,17 @@ import {
   Send,
   StickyNote,
   Info,
+  RotateCcw,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PIPELINE_STAGES } from "@/lib/site-config";
-import { getLeadNotifications, type LeadNotification } from "@/lib/leads.functions";
+import {
+  getLeadNotifications,
+  retryLeadNotification,
+  type LeadNotification,
+} from "@/lib/leads.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -393,6 +398,27 @@ function AlertDetailDialog({
   onClose: () => void;
 }) {
   const s = notifyState(notification.status);
+  const qc = useQueryClient();
+  const canRetry =
+    notification.status === "failed" || notification.status === "dlq";
+  const retryFn = useServerFn(retryLeadNotification);
+  const retry = useMutation({
+    mutationFn: () => retryFn({ data: { leadId: lead.id } }),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Notification re-queued");
+        qc.invalidateQueries({ queryKey: ["lead-notifications"] });
+        onClose();
+      } else {
+        toast.error(
+          result.reason === "email_suppressed"
+            ? "Recipient is on the suppression list — can't re-send"
+            : "Could not re-queue the notification",
+        );
+      }
+    },
+    onError: () => toast.error("Could not re-queue the notification"),
+  });
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
@@ -486,6 +512,18 @@ function AlertDetailDialog({
             );
           })()}
         </div>
+        {canRetry && (
+          <div className="mt-2 flex justify-end border-t pt-4">
+            <Button onClick={() => retry.mutate()} disabled={retry.isPending}>
+              {retry.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              Retry failed
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
