@@ -153,6 +153,9 @@ function CrmPage() {
   const { data: notifications = [] } = useQuery({
     queryKey: ["lead-notifications"],
     queryFn: () => fetchNotifications(),
+    // While retried leads are settling, poll so the table converges on their
+    // final Failed/DLQ/Suppressed/Sent status without a manual refresh.
+    refetchInterval: settlingIds.size > 0 ? 2500 : false,
   });
 
   const notifyByLead = useMemo(() => {
