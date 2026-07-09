@@ -1,0 +1,27 @@
+version: 2
+updates:
+  # Keep npm dependencies up to date to keep the CI security gate green.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "chore(deps)"
+      include: scope
+    open-pull-requests-limit: 10
+    # Group non-breaking patch/minor updates together so they don't flood the PR queue.
+    groups:
+      patch-minor-dependencies:
+        update-types:
+          - patch
+          - minor
+    labels:
+      - dependencies
+      - security
+    # Let CI (npm audit, secret scan, CodeQL) run on the PRs before merging.
+    rebase-strategy: auto
+    ignore:
+      # Avoid auto-major-version bumps which can introduce breaking changes.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
