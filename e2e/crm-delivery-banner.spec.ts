@@ -602,8 +602,31 @@ test("reselecting a retried lead after deselecting it mid-poll leaves the banner
   await expect(banner).toBeHidden({ timeout: 20_000 });
 });
 
+test("banner does not clear while one retried lead is still pending, even after the other settles", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
 
+  // Retry Ada + Bea. Ada settles to "sent" early (poll >= 2 ≈ 5s); Bea stays
+  // "pending" much longer and only settles at poll >= 7 (≈ 17.5s). Cyd is never
+  // retried and stays "failed" throughout. The banner must remain visible
+  // during the gap when Ada is settled but Bea is still in flight.
+  await installMocks(page, THREE_LEADS, (lead, { retried, poll }) => {
+    if (!retried) return "failed"; // Cyd: never retried
+    if (lead.id === ada.id) return poll >= 2 ? "sent" : "pending"; // settles early
+    return poll >= 7 ? "sent" : "pending"; // bea settles late
+  });
 
+  await retryAllLeads(page, THREE_LEADS);
 
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
 
+  // Ada settles early, but Bea is still pending: the banner must stay up
+  // because it is scoped to the full retried set, not any individual lead.
+  await page.waitForTimeout(8_000);
+  await expect(banner).toBeVisible();
 
+  // Only once Bea also settles does the banner clear.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
