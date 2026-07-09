@@ -4,6 +4,7 @@ import { Download, CalendarClock, Sparkles, CheckCircle2, ArrowRight } from "luc
 import { SiteFooter } from "@/components/landing/SiteChrome";
 import { siteConfig } from "@/lib/site-config";
 import ebookCover from "@/assets/ebook-cover.png";
+import ebookPdf from "@/assets/freedom-legacy-framework.pdf.asset.json";
 
 export const Route = createFileRoute("/thank-you")({
   head: () => ({
