@@ -35,10 +35,12 @@ export async function dispatchTransactionalEmail(
     recipientEmail: string
     idempotencyKey?: string
     templateData?: Record<string, any>
+    metadata?: Record<string, any>
   },
 ): Promise<DispatchResult> {
   const { templateName, recipientEmail } = params
   const templateData = params.templateData ?? {}
+  const metadata = params.metadata ?? null
   const messageId = crypto.randomUUID()
   const idempotencyKey = params.idempotencyKey ?? messageId
 
