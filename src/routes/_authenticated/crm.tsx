@@ -113,6 +113,21 @@ function CrmPage() {
     },
   });
 
+  const fetchNotifications = useServerFn(getLeadNotifications);
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["lead-notifications"],
+    queryFn: () => fetchNotifications(),
+  });
+
+  const notifyByLead = useMemo(() => {
+    const map = new Map<string, string>();
+    // notifications come newest-first; keep the first (latest) per lead.
+    for (const n of notifications) {
+      if (n.lead_id && !map.has(n.lead_id)) map.set(n.lead_id, n.status);
+    }
+    return map;
+  }, [notifications]);
+
   const stats = useMemo(() => {
     const total = leads.length;
     const won = leads.filter((l) => l.status === "won").length;
