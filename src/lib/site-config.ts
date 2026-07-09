@@ -10,6 +10,9 @@ export const siteConfig = {
   // Sign-up link for the free 7-day AI platform trial.
   aiTrialUrl: "#",
   supportEmail: "hello@freedomlegacyelevationgroup.com",
+  // Inbox that receives an alert whenever a new lead is captured.
+  // Replace with the address where you want new-lead notifications delivered.
+  leadNotificationEmail: "hello@freedomlegacyelevationframework.com",
 };
 
 export const PIPELINE_STAGES = [
