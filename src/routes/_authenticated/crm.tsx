@@ -102,7 +102,8 @@ function notifyState(status: string | undefined): NotifyState {
 }
 
 function CrmPage() {
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/_authenticated/crm" });
+  const { notify } = Route.useSearch();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
