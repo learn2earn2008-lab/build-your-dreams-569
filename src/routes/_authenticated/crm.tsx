@@ -127,6 +127,7 @@ function CrmPage() {
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRetryConfirmOpen, setBulkRetryConfirmOpen] = useState(false);
   const [alertDetail, setAlertDetail] = useState<
     { lead: Lead; notification: LeadNotification } | null
   >(null);
