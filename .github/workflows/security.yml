@@ -6,6 +6,8 @@
 #     matching the severity bar Lovable's dependency scanner uses.
 #   - A secret scan (TruffleHog) that fails the build if any verified leaked
 #     credentials are detected in the repository or in the PR diff.
+#   - A static analysis scan (CodeQL) that detects security vulnerabilities in
+#     JavaScript/TypeScript code and blocks the PR on new findings.
 #
 # What CANNOT run here:
 #   - Lovable's backend/RLS security scanner and the Supabase database linter
@@ -71,3 +73,28 @@ jobs:
           base: ${{ github.event.pull_request.base.sha || '' }}
           head: ${{ github.event.pull_request.head.sha || github.sha }}
           extra_args: --only-verified
+
+  codeql:
+    name: CodeQL analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
