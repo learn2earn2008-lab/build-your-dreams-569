@@ -403,4 +403,40 @@ test("toggling a checkbox during polling updates the selection, not the banner",
   await expect(banner).toBeHidden({ timeout: 15_000 });
 });
 
+test("selecting a new lead mid-poll does NOT widen the banner scope", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Retry Ada + Bea; they stay "pending" until poll >= 5 (≈ 12.5s). Cyd is
+  // never retried and NEVER settles (stays "failed" the whole time), so it
+  // remains retryable/selectable — it is the lead we newly select mid-poll.
+  await installMocks(page, THREE_LEADS, (lead, { retried, poll }) => {
+    if (!retried) return "failed"; // Cyd: retryable, never settles
+    return poll >= 5 ? "sent" : "pending"; // ada & bea
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // Newly select Cyd mid-poll. The selection toolbar picks it up, but the
+  // banner scope is the retried set (Ada + Bea) — it must NOT expand to wait
+  // on Cyd.
+  await page.getByLabel(`Select ${cyd.name}`).click();
+  await expect(page.getByText("1 selected")).toBeVisible();
+  await expect(banner).toBeVisible();
+
+  // Cyd stays "failed" (never settles), yet the banner still clears once the
+  // originally retried Ada + Bea settle — proving the newly selected lead was
+  // never folded into the banner's settling scope.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+
+  // Cyd is still selected and retryable after the banner clears; its selection
+  // state is independent of the (now-finished) settling window.
+  await expect(page.getByText("1 selected")).toBeVisible();
+});
+
+
 
