@@ -492,6 +492,37 @@ function CrmPage() {
         </div>
       </main>
 
+      <AlertDialog open={bulkRetryConfirmOpen} onOpenChange={setBulkRetryConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-queue {visibleSelectedIds.length} notifications?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will send a new new-lead alert for each selected lead. Suppressed
+              addresses will still be skipped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBulkRetryConfirmOpen(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                bulkRetry.mutate(visibleSelectedIds);
+                setBulkRetryConfirmOpen(false);
+              }}
+              disabled={bulkRetry.isPending}
+            >
+              {bulkRetry.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              Retry {visibleSelectedIds.length} failed
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {selected && (
         <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
       )}
