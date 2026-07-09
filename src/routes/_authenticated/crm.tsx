@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, getRouteApi } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
+import { z } from "zod";
 import { toast } from "sonner";
 import {
   Landmark,
@@ -45,7 +47,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+const notifyFilterSchema = z.object({
+  notify: fallback(z.string(), "all").default("all"),
+});
+
 export const Route = createFileRoute("/_authenticated/crm")({
+  validateSearch: zodValidator(notifyFilterSchema),
   component: CrmPage,
 });
 
@@ -95,7 +102,8 @@ function notifyState(status: string | undefined): NotifyState {
 }
 
 function CrmPage() {
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/_authenticated/crm" });
+  const { notify } = Route.useSearch();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
@@ -143,9 +151,17 @@ function CrmPage() {
         !q ||
         l.name.toLowerCase().includes(q) ||
         l.email.toLowerCase().includes(q);
-      return matchesStage && matchesSearch;
+      const status = notifyByLead.get(l.id);
+      const matchesNotify =
+        notify === "all" ||
+        (notify === "none" && !status) ||
+        (notify === "queued" && status === "pending") ||
+        (notify === "sent" && status === "sent") ||
+        (notify === "failed" && (status === "failed" || status === "dlq")) ||
+        (notify === "suppressed" && status === "suppressed");
+      return matchesStage && matchesSearch && matchesNotify;
     });
-  }, [leads, search, stageFilter]);
+  }, [leads, search, stageFilter, notify, notifyByLead]);
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -210,7 +226,7 @@ function CrmPage() {
             />
           </div>
           <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="sm:w-48">
+            <SelectTrigger className="sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -220,6 +236,26 @@ function CrmPage() {
                   {s.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={notify}
+            onValueChange={(v) =>
+              navigate({
+                search: (prev: { notify: string }) => ({ ...prev, notify: v }),
+              })
+            }
+          >
+            <SelectTrigger className="sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any alert status</SelectItem>
+              <SelectItem value="queued">Queued</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="suppressed">Suppressed</SelectItem>
+              <SelectItem value="none">No alert</SelectItem>
             </SelectContent>
           </Select>
         </div>
