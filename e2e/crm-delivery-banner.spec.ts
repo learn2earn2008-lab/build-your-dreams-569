@@ -97,9 +97,10 @@ async function installMocks(page: Page, statusAfterRetry: () => string) {
     [STORAGE_KEY, JSON.stringify(session)] as const,
   );
 
-  // Supabase auth: getUser() and any token refresh.
-  await page.route("**/auth/v1/user**", (route) => json(route, session.user));
-  await page.route("**/auth/v1/token**", (route) => json(route, session));
+  // Supabase auth: getUser() and any token refresh (plain PostgREST/GoTrue JSON).
+  await page.route("**/auth/v1/**", (route) =>
+    json(route, route.request().url().includes("/user") ? session.user : session),
+  );
 
   // Supabase REST: the leads list; empty for anything else.
   await page.route("**/rest/v1/**", (route) => {
@@ -111,13 +112,20 @@ async function installMocks(page: Page, statusAfterRetry: () => string) {
 
   // TanStack server functions: `/ln/*` in production builds, `/_serverFn/*`
   // under the Vite dev server. GET -> getLeadNotifications, POST -> retry.
+  // Their responses must be seroval-encoded and flagged `x-tss-serialized`
+  // so the Start client deserializes them like a real server-fn response.
   let retried = false;
   const serverFn = (route: Route) => {
     if (route.request().method() === "POST") {
       retried = true;
-      return json(route, { requeued: 1, suppressed: 0, failed: 0, notFound: 0 });
+      return serverFnJson(route, {
+        requeued: 1,
+        suppressed: 0,
+        failed: 0,
+        notFound: 0,
+      });
     }
-    return json(route, notification(retried ? statusAfterRetry() : "failed"));
+    return serverFnJson(route, notification(retried ? statusAfterRetry() : "failed"));
   };
   await page.route("**/_serverFn/**", serverFn);
   await page.route("**/ln/**", serverFn);
