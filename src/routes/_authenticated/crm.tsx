@@ -167,6 +167,37 @@ function CrmPage() {
     return map;
   }, [notifications]);
 
+  // Re-evaluate the settling set every time notifications refetch. A retry
+  // writes a fresh `pending` row per lead, which later resolves to
+  // sent/failed/dlq (suppressed sends stay suppressed). Drop a lead from the
+  // set once it reaches a terminal state, and hard-stop at the deadline so the
+  // poll can never run forever.
+  useEffect(() => {
+    if (settlingIds.size === 0) return;
+    if (Date.now() > settleDeadline.current) {
+      setSettlingIds(new Set());
+      return;
+    }
+    setSettlingIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        const s = notifyByLead.get(id)?.status;
+        if (s === "pending") {
+          // Retried send is in flight — keep polling.
+          seenPending.current.add(id);
+          next.add(id);
+        } else if (s === "failed" || s === "dlq") {
+          // Keep waiting until the retried `pending` row lands; once we've seen
+          // it, a failed/dlq status means the retry itself failed (settled).
+          if (!seenPending.current.has(id)) next.add(id);
+        }
+        // sent / suppressed / undefined → settled, so it drops out.
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [notifications, notifyByLead, settlingIds]);
+
+
   const stats = useMemo(() => {
     const total = leads.length;
     const won = leads.filter((l) => l.status === "won").length;
