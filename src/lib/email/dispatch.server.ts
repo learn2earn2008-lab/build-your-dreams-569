@@ -1,7 +1,5 @@
 import * as React from 'react'
-import { render } from '@react-email/render'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { TEMPLATES } from '@/lib/email-templates/registry'
 
 const SITE_NAME = 'Freedom Legacy Elevation Group'
 // Verified sender subdomain FQDN delegated to Lovable's nameservers.
@@ -44,6 +42,7 @@ export async function dispatchTransactionalEmail(
   const messageId = crypto.randomUUID()
   const idempotencyKey = params.idempotencyKey ?? messageId
 
+  const { TEMPLATES } = await import('@/lib/email-templates/registry')
   const template = TEMPLATES[templateName]
   if (!template) {
     console.error('Template not found in registry', { templateName })
@@ -110,6 +109,7 @@ export async function dispatchTransactionalEmail(
   }
 
   // Render
+  const { render } = await import('@react-email/render')
   const element = React.createElement(template.component, templateData)
   const html = await render(element)
   const plainText = await render(element, { plainText: true })
