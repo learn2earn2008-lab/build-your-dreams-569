@@ -122,6 +122,7 @@ export async function dispatchTransactionalEmail(
     template_name: templateName,
     recipient_email: effectiveRecipient,
     status: 'pending',
+    metadata,
   })
 
   const { error: enqueueError } = await supabase.rpc('enqueue_email', {
