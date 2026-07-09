@@ -237,6 +237,7 @@ function CrmPage() {
         toast.error(parts.join(" · ") || "Nothing was re-queued");
       }
       qc.invalidateQueries({ queryKey: ["lead-notifications"] });
+      qc.invalidateQueries({ queryKey: ["leads"] });
       setBulkRetryConfirmOpen(false);
       clearSelection();
     },
