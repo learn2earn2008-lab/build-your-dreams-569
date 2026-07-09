@@ -108,6 +108,9 @@ function CrmPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const [alertDetail, setAlertDetail] = useState<
+    { lead: Lead; notification: LeadNotification } | null
+  >(null);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["leads"],
