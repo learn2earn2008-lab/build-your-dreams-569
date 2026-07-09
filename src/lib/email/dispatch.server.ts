@@ -35,10 +35,12 @@ export async function dispatchTransactionalEmail(
     recipientEmail: string
     idempotencyKey?: string
     templateData?: Record<string, any>
+    metadata?: Record<string, any>
   },
 ): Promise<DispatchResult> {
   const { templateName, recipientEmail } = params
   const templateData = params.templateData ?? {}
+  const metadata = params.metadata ?? null
   const messageId = crypto.randomUUID()
   const idempotencyKey = params.idempotencyKey ?? messageId
 
@@ -71,6 +73,7 @@ export async function dispatchTransactionalEmail(
       template_name: templateName,
       recipient_email: effectiveRecipient,
       status: 'suppressed',
+      metadata,
     })
     return { success: false, reason: 'email_suppressed' }
   }
@@ -119,6 +122,7 @@ export async function dispatchTransactionalEmail(
     template_name: templateName,
     recipient_email: effectiveRecipient,
     status: 'pending',
+    metadata,
   })
 
   const { error: enqueueError } = await supabase.rpc('enqueue_email', {
@@ -147,6 +151,7 @@ export async function dispatchTransactionalEmail(
       recipient_email: effectiveRecipient,
       status: 'failed',
       error_message: 'Failed to enqueue email',
+      metadata,
     })
     return { success: false, reason: 'enqueue_failed' }
   }

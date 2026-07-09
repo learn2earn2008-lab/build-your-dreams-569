@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import {
   Landmark,
@@ -19,6 +20,7 @@ import { formatDistanceToNow } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client";
 import { PIPELINE_STAGES } from "@/lib/site-config";
+import { getLeadNotifications } from "@/lib/leads.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,6 +76,24 @@ const stageStyles: Record<string, string> = {
   lost: "bg-muted text-muted-foreground",
 };
 
+type NotifyState = { label: string; className: string };
+
+function notifyState(status: string | undefined): NotifyState {
+  switch (status) {
+    case "sent":
+      return { label: "Sent", className: "bg-emerald-500/15 text-emerald-600" };
+    case "pending":
+      return { label: "Queued", className: "bg-chart-2/15 text-chart-2" };
+    case "failed":
+    case "dlq":
+      return { label: "Failed", className: "bg-destructive/15 text-destructive" };
+    case "suppressed":
+      return { label: "Suppressed", className: "bg-muted text-muted-foreground" };
+    default:
+      return { label: "—", className: "bg-muted text-muted-foreground" };
+  }
+}
+
 function CrmPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -92,6 +112,21 @@ function CrmPage() {
       return data as Lead[];
     },
   });
+
+  const fetchNotifications = useServerFn(getLeadNotifications);
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["lead-notifications"],
+    queryFn: () => fetchNotifications(),
+  });
+
+  const notifyByLead = useMemo(() => {
+    const map = new Map<string, string>();
+    // notifications come newest-first; keep the first (latest) per lead.
+    for (const n of notifications) {
+      if (n.lead_id && !map.has(n.lead_id)) map.set(n.lead_id, n.status);
+    }
+    return map;
+  }, [notifications]);
 
   const stats = useMemo(() => {
     const total = leads.length;
@@ -198,19 +233,20 @@ function CrmPage() {
                 <TableHead className="hidden md:table-cell">Contact</TableHead>
                 <TableHead className="hidden sm:table-cell">Source</TableHead>
                 <TableHead>Stage</TableHead>
+                <TableHead>Alert</TableHead>
                 <TableHead className="hidden lg:table-cell">Added</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto size-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                     No leads yet. Share your landing page to start collecting them.
                   </TableCell>
                 </TableRow>
@@ -251,6 +287,16 @@ function CrmPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const s = notifyState(notifyByLead.get(lead.id));
+                        return (
+                          <Badge variant="secondary" className={s.className}>
+                            {s.label}
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                       {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true })}
