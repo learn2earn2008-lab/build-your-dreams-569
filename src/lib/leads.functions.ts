@@ -7,8 +7,8 @@ export type LeadNotificationError = {
   status?: number | string
   code?: string
   retry_after_seconds?: number
-  body?: unknown
-  response?: unknown
+  body?: string
+  response?: string
 }
 
 export type LeadNotification = {
