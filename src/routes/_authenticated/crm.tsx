@@ -27,6 +27,7 @@ import { PIPELINE_STAGES } from "@/lib/site-config";
 import {
   getLeadNotifications,
   retryLeadNotification,
+  retryLeadNotifications,
   type LeadNotification,
 } from "@/lib/leads.functions";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -114,6 +116,7 @@ function CrmPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string>("all");
   const [selected, setSelected] = useState<Lead | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [alertDetail, setAlertDetail] = useState<
     { lead: Lead; notification: LeadNotification } | null
   >(null);
@@ -171,6 +174,64 @@ function CrmPage() {
       return matchesStage && matchesSearch && matchesNotify;
     });
   }, [leads, search, stageFilter, notify, notifyByLead]);
+
+  // A lead can be re-queued when its latest alert failed, hit the DLQ, or was
+  // suppressed.
+  const isRetryable = (leadId: string) => {
+    const s = notifyByLead.get(leadId)?.status;
+    return s === "failed" || s === "dlq" || s === "suppressed";
+  };
+
+  const retryableFiltered = useMemo(
+    () => filtered.filter((l) => isRetryable(l.id)),
+    [filtered, notifyByLead],
+  );
+
+  // Keep the selection in sync with what's actually retryable and visible.
+  const visibleSelectedIds = useMemo(
+    () => retryableFiltered.filter((l) => selectedIds.has(l.id)).map((l) => l.id),
+    [retryableFiltered, selectedIds],
+  );
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) => {
+      const allSelected =
+        retryableFiltered.length > 0 &&
+        retryableFiltered.every((l) => prev.has(l.id));
+      if (allSelected) return new Set();
+      return new Set(retryableFiltered.map((l) => l.id));
+    });
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const fetchBulkRetry = useServerFn(retryLeadNotifications);
+  const bulkRetry = useMutation({
+    mutationFn: (leadIds: string[]) => fetchBulkRetry({ data: { leadIds } }),
+    onSuccess: (r) => {
+      const parts: string[] = [];
+      if (r.requeued) parts.push(`${r.requeued} re-queued`);
+      if (r.suppressed) parts.push(`${r.suppressed} suppressed`);
+      if (r.failed) parts.push(`${r.failed} failed`);
+      if (r.requeued > 0) {
+        toast.success(parts.join(" · ") || "Done");
+      } else {
+        toast.error(parts.join(" · ") || "Nothing was re-queued");
+      }
+      qc.invalidateQueries({ queryKey: ["lead-notifications"] });
+      clearSelection();
+    },
+    onError: () => toast.error("Could not re-queue notifications"),
+  });
+
+
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -269,11 +330,49 @@ function CrmPage() {
           </Select>
         </div>
 
+        {/* Bulk action bar */}
+        {visibleSelectedIds.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+            <span className="text-sm">
+              <span className="font-medium">{visibleSelectedIds.length}</span>{" "}
+              selected
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
+                Clear
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => bulkRetry.mutate(visibleSelectedIds)}
+                disabled={bulkRetry.isPending}
+              >
+                {bulkRetry.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="size-4" />
+                )}
+                Retry {visibleSelectedIds.length} failed
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="mt-4 overflow-hidden rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    aria-label="Select all retryable leads"
+                    disabled={retryableFiltered.length === 0}
+                    checked={
+                      retryableFiltered.length > 0 &&
+                      retryableFiltered.every((l) => selectedIds.has(l.id))
+                    }
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="hidden md:table-cell">Contact</TableHead>
                 <TableHead className="hidden sm:table-cell">Source</TableHead>
@@ -285,13 +384,13 @@ function CrmPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     <Loader2 className="mx-auto size-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
                     No leads yet. Share your landing page to start collecting them.
                   </TableCell>
                 </TableRow>
@@ -302,6 +401,15 @@ function CrmPage() {
                     className="cursor-pointer"
                     onClick={() => setSelected(lead)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {isRetryable(lead.id) ? (
+                        <Checkbox
+                          aria-label={`Select ${lead.name}`}
+                          checked={selectedIds.has(lead.id)}
+                          onCheckedChange={() => toggleSelected(lead.id)}
+                        />
+                      ) : null}
+                    </TableCell>
                     <TableCell className="font-medium">{lead.name}</TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                       {lead.email}

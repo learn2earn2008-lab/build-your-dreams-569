@@ -3,6 +3,12 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware'
 
 export type RetryResult = { success: boolean; reason?: string }
+export type BulkRetryResult = {
+  requeued: number
+  suppressed: number
+  failed: number
+  notFound: number
+}
 
 
 export type LeadNotificationError = {
@@ -134,4 +140,73 @@ export const retryLeadNotification = createServerFn({ method: 'POST' })
     })
 
     return { success: result.success, reason: result.reason }
+  })
+
+/**
+ * Bulk variant of retryLeadNotification: re-queues the new-lead notification
+ * for many leads at once (used by the CRM bulk "Retry failed" action). Reads
+ * the leads with the admin client after confirming the caller is an
+ * authenticated team member, then dispatches each with a unique idempotency
+ * key. Suppressed recipients are counted separately since sending is refused.
+ */
+export const retryLeadNotifications = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: { leadIds: string[] }) => data)
+  .handler(async ({ data }): Promise<BulkRetryResult> => {
+    const ids = Array.from(new Set(data.leadIds)).filter(Boolean).slice(0, 200)
+    const result: BulkRetryResult = {
+      requeued: 0,
+      suppressed: 0,
+      failed: 0,
+      notFound: 0,
+    }
+    if (ids.length === 0) return result
+
+    const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
+    const { dispatchTransactionalEmail } = await import('@/lib/email/dispatch.server')
+    const { siteConfig } = await import('@/lib/site-config')
+
+    const { data: leads, error } = await supabaseAdmin
+      .from('leads')
+      .select('id, name, email, phone, source')
+      .in('id', ids)
+
+    if (error) throw error
+
+    const found = new Map((leads ?? []).map((l) => [l.id, l]))
+    result.notFound = ids.filter((id) => !found.has(id)).length
+
+    for (const lead of leads ?? []) {
+      try {
+        const r = await dispatchTransactionalEmail(supabaseAdmin, {
+          templateName: 'new-lead-notification',
+          recipientEmail: siteConfig.leadNotificationEmail,
+          idempotencyKey: `new-lead-retry-${lead.email.toLowerCase()}-${Date.now()}-${lead.id}`,
+          metadata: {
+            lead_id: lead.id,
+            lead_email: lead.email,
+            lead_name: lead.name,
+            source: lead.source,
+            retried: true,
+          },
+          templateData: {
+            name: lead.name,
+            email: lead.email,
+            phone: lead.phone || undefined,
+            source: lead.source,
+            submittedAt: new Date().toLocaleString('en-US', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }),
+          },
+        })
+        if (r.success) result.requeued++
+        else if (r.reason === 'email_suppressed') result.suppressed++
+        else result.failed++
+      } catch {
+        result.failed++
+      }
+    }
+
+    return result
   })
