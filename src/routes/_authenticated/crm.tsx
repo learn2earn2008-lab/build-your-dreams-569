@@ -226,7 +226,7 @@ function CrmPage() {
             />
           </div>
           <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="sm:w-48">
+            <SelectTrigger className="sm:w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -236,6 +236,24 @@ function CrmPage() {
                   {s.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={notify}
+            onValueChange={(v) =>
+              navigate({ search: (prev) => ({ ...prev, notify: v }) })
+            }
+          >
+            <SelectTrigger className="sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any alert status</SelectItem>
+              <SelectItem value="queued">Queued</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="suppressed">Suppressed</SelectItem>
+              <SelectItem value="none">No alert</SelectItem>
             </SelectContent>
           </Select>
         </div>
