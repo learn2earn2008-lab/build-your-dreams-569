@@ -6,7 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowRight, Loader2 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,18 +36,24 @@ export function CaptureForm({
 
   const onSubmit = async (values: FormValues) => {
     setSubmitting(true);
-    const { error } = await supabase.from("leads").insert({
-      name: values.name,
-      email: values.email,
-      phone: values.phone || null,
-      source,
-    });
-    setSubmitting(false);
-
-    if (error) {
+    try {
+      const res = await fetch("/api/public/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: values.name,
+          email: values.email,
+          phone: values.phone || "",
+          source,
+        }),
+      });
+      if (!res.ok) throw new Error("Request failed");
+    } catch {
+      setSubmitting(false);
       toast.error("Something went wrong. Please try again.");
       return;
     }
+    setSubmitting(false);
     navigate({ to: "/thank-you" });
   };
 
