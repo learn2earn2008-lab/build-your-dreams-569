@@ -1,0 +1,2 @@
+DELETE FROM public.email_send_log WHERE recipient_email = 'hello@freedomlegacyelevationframework.com' AND template_name = 'new-lead-notification' AND status = 'pending' AND created_at > now() - interval '1 hour';
+DELETE FROM public.leads WHERE email = 'qa-test-lead@example.com';
