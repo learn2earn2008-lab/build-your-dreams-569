@@ -398,6 +398,27 @@ function AlertDetailDialog({
   onClose: () => void;
 }) {
   const s = notifyState(notification.status);
+  const qc = useQueryClient();
+  const canRetry =
+    notification.status === "failed" || notification.status === "dlq";
+  const retryFn = useServerFn(retryLeadNotification);
+  const retry = useMutation({
+    mutationFn: () => retryFn({ data: { leadId: lead.id } }),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Notification re-queued");
+        qc.invalidateQueries({ queryKey: ["lead-notifications"] });
+        onClose();
+      } else {
+        toast.error(
+          result.reason === "email_suppressed"
+            ? "Recipient is on the suppression list — can't re-send"
+            : "Could not re-queue the notification",
+        );
+      }
+    },
+    onError: () => toast.error("Could not re-queue the notification"),
+  });
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
