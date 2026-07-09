@@ -476,6 +476,44 @@ test("toggling a checkbox off then back on mid-poll leaves the banner scope inta
   await expect(banner).toBeHidden({ timeout: 15_000 });
 });
 
+test("deselecting all originally selected leads mid-poll keeps the banner scoped to them", async ({
+  page,
+}) => {
+  const [ada, bea, cyd] = THREE_LEADS;
+
+  // Retry Ada + Bea. They report "failed" for the first few polls so their
+  // checkboxes remain visible and we can actively deselect them; then they
+  // settle to "sent". Cyd is never retried and stays "failed" throughout.
+  await installMocks(page, THREE_LEADS, (lead, { retried, poll }) => {
+    if (!retried) return "failed"; // Cyd
+    return poll >= 4 ? "sent" : "failed"; // ada & bea
+  });
+
+  await retrySelectedLeads(page, THREE_LEADS, [ada, bea]);
+
+  const banner = page.getByText(BANNER_TEXT, { exact: false });
+  await expect(banner).toBeVisible();
+
+  // Wait for a poll where Ada + Bea are still "failed" and therefore still
+  // retryable with visible checkboxes.
+  await page.waitForTimeout(3_000);
+
+  // Re-select the originally retried leads, then deselect them again to
+  // simulate the user clearing every originally selected lead mid-poll.
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await page.getByLabel(`Select ${bea.name}`).click();
+  await expect(page.getByText("2 selected")).toBeVisible();
+
+  await page.getByLabel(`Select ${ada.name}`).click();
+  await page.getByLabel(`Select ${bea.name}`).click();
+  await expect(page.getByText("selected")).toBeHidden();
+  await expect(banner).toBeVisible();
+
+  // The banner clears only when Ada + Bea settle to "sent" — the mid-poll
+  // deselection does not shrink the banner's retried set.
+  await expect(banner).toBeHidden({ timeout: 15_000 });
+});
+
 
 
 
