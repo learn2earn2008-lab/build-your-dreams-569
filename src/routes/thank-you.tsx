@@ -100,6 +100,7 @@ function ThankYou() {
                 href={s.href}
                 target={s.href.startsWith("http") ? "_blank" : undefined}
                 rel="noreferrer"
+                download={"download" in s ? s.download : undefined}
                 className={`mt-5 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold transition-colors ${
                   s.primary
                     ? "bg-primary text-primary-foreground hover:bg-primary/90"
