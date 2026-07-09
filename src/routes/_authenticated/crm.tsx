@@ -388,6 +388,17 @@ function CrmPage() {
           </Select>
         </div>
 
+        {/* Polling status indicator */}
+        {settlingIds.size > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+            <Loader2 className="size-4 animate-spin text-primary" />
+            <span className="font-medium text-foreground">Checking delivery status…</span>
+            <span className="text-muted-foreground">
+              Updates stop once every retried lead reaches Sent, Failed, DLQ, or Suppressed (or after 30 seconds).
+            </span>
+          </div>
+        )}
+
         {/* Bulk action bar */}
         {visibleSelectedIds.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3">
