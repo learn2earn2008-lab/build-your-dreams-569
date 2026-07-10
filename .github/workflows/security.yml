@@ -6,7 +6,7 @@
 #     matching the severity bar Lovable's dependency scanner uses.
 #   - A secret scan (TruffleHog) that fails the build if any verified leaked
 #     credentials are detected in the repository or in the PR diff.
-#   - A static analysis scan (CodeQL) that detects security vulnerabilities in
+#   - A static analysis scan (CodeQK) that detects security vulnerabilities in
 #     JavaScript/TypeScript code and blocks the PR on new findings.
 #
 # What CANNOT run here:
@@ -99,13 +99,6 @@ jobs:
         with:
           category: "/language:javascript-typescript"
           output: codeql-results
-
-      - name: Upload CodeQL SARIF to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: codeql-results/javascript-typescript.sarif
-          category: "/language:javascript-typescript"
 
       - name: Upload CodeQL SARIF as artifact
         uses: actions/upload-artifact@v4
